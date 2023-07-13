@@ -92,8 +92,12 @@ def dropbox_init() -> Tuple[Dropbox, Dict[str, FileMetadata]]:
     return dbx, files
 
 def download_json(entry: FileMetadata) -> Dict[Any, Any]:
-    if ("json" in entry.path_lower and entry.is_downloadable):
-        metadata, response = dbx.files_download(entry.path_lower)
+    if "json" in entry.path_lower:
+        if entry.is_downloadable:
+            metadata, response = dbx.files_download(entry.path_lower)
+        else:
+            # TODO test this (?)
+            export_result, response = dbx.files_export(entry.path_lower)
         content = json.loads(response.content)
         return content
     return {}
