@@ -151,12 +151,65 @@ def get_metadata_json(dbx: Dropbox, query: str, all_files=None, has_run=False) -
         # TODO throw exception? return None?
         return {}
 
-def search_files(dbx: Dropbox, query: str, all_files=None, path="", recursive=True) -> List[Metadata]:
+def parse_query(query: str) -> Tuple[List[str], List[str], List[str]]:
     query_terms = query.split(" ")
-    include = [s[1:] for s in query_terms if s.startswith("+") and len(s) > 1]
-    exclude = [s[1:] for s in query_terms if s.startswith("-") and len(s) > 1]
-    optional = [s for s in query_terms if not ((s.startswith("+") or s.startswith("-")) and len(s) > 1)]
+    include = []
+    exclude = []
+    optional = []
+
+    phrases = []
+    phrase_indices = []
+    phrase_indices_all = []
+    for i in range(len(query_terms) - 1):
+        if query_terms[i].startswith('"') or \
+            (any(query_terms[i].startswith(inc_ex) for inc_ex in ["+", "-"]) and query_terms[i][1] == '"'):
+            for j in range(i, len(query_terms)):
+                if query_terms[j].endswith('"'):
+                    phrases.append(" ".join(query_terms[i:j+1]).strip('+-"'))
+                    phrase_indices.append([n for n in range(i, j+1)])
+                    phrase_indices_all.extend(range(i, j+1))
+                    break
+
+    include_indices = [i for i in range(len(query_terms)) \
+                       if query_terms[i].startswith("+") and len(query_terms[i]) > 1]
+    exclude_indices = [i for i in range(len(query_terms)) \
+                       if query_terms[i].startswith("-") and len(query_terms[i]) > 1]
     
+    for i in include_indices:
+        added = False
+        for phrase in range(len(phrases)):
+            if i == phrase_indices[phrase][0]:
+                include.append(phrases[phrase])
+                added = True
+                break
+        if not added:
+            include.append(query_terms[i].strip("+"))
+                
+    for i in exclude_indices:
+        added = False
+        for phrase in range(len(phrases)):
+            if i == phrase_indices[phrase][0]:
+                exclude.append(phrases[phrase])
+                added = True
+                break
+        if not added:
+            include.append(query_terms[i].strip("-"))
+
+    for ph in phrases:
+        if ph not in include + exclude:
+            optional.append(ph)
+
+    for i in range(len(query_terms)):
+        if i not in phrase_indices_all:
+            term = query_terms[i].strip('+-')
+            if len(term) <= 1 or term not in include + exclude + optional:
+                optional.append(term)
+
+    return include, exclude, optional
+
+def search_files(dbx: Dropbox, query: str, all_files=None, path="", recursive=True) -> List[Metadata]:
+    include, exclude, optional = parse_query(query)
+
     # saves having to get all files every time
     if not all_files:
         all_files = get_files(dbx, path, recursive)
@@ -171,6 +224,7 @@ def search_files(dbx: Dropbox, query: str, all_files=None, path="", recursive=Tr
 
 load_dotenv()
 dbx = dropbox_init()
+# search_files(dbx, 'json +"the cat" -"sat on" +mats -"carpet" turkey "optional phrase"')
 # get_metadata_json(dbx, "+json")
 # print([f.path_lower for f in search_files(dbx, "jpg +training -airfare")])
 # add_metadata_to_files(dbx)
