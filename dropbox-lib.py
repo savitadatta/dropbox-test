@@ -5,8 +5,13 @@ from datetime import datetime
 from dotenv import load_dotenv, set_key
 
 from dropbox import Dropbox
-from dropbox.files import Metadata, FileMetadata, DeletedMetadata, SearchMode, WriteMode
+from dropbox.files import Metadata, FileMetadata, DeletedMetadata, WriteMode
 from dropbox.exceptions import ApiError
+
+
+class NewMetadata(FileMetadata):
+    last_updated: datetime
+
 
 # Env and dates
 def format_datetime(value: datetime) -> str:
@@ -114,10 +119,8 @@ def dropbox_init() -> Dropbox:
     return dbx
 
 def get_metadata_json(dbx: Dropbox, query: str, all_files=None, has_run=False) -> Dict[str, Any]:
-    if not ("+json" in query or "+.json" in query):
+    if not "json" in query:
         query += " +.json"
-    if not all_files:
-        all_files = get_files(dbx)
     files = search_files(dbx, query, all_files)
 
     if len(files) == 1:
@@ -160,6 +163,8 @@ def parse_query(query: str) -> Tuple[List[str], List[str], List[str]]:
     phrases = []
     phrase_indices = []
     phrase_indices_all = []
+    
+    # find out which parts are in phrases
     for i in range(len(query_terms) - 1):
         if query_terms[i].startswith('"') or \
             (any(query_terms[i].startswith(inc_ex) for inc_ex in ["+", "-"]) and query_terms[i][1] == '"'):
@@ -170,11 +175,13 @@ def parse_query(query: str) -> Tuple[List[str], List[str], List[str]]:
                     phrase_indices_all.extend(range(i, j+1))
                     break
 
+    # get indices of which parts to include or exclude
     include_indices = [i for i in range(len(query_terms)) \
                        if query_terms[i].startswith("+") and len(query_terms[i]) > 1]
     exclude_indices = [i for i in range(len(query_terms)) \
                        if query_terms[i].startswith("-") and len(query_terms[i]) > 1]
     
+    # add phrases and single terms to include/exclude
     for i in include_indices:
         added = False
         for phrase in range(len(phrases)):
@@ -199,6 +206,7 @@ def parse_query(query: str) -> Tuple[List[str], List[str], List[str]]:
         if ph not in include + exclude:
             optional.append(ph)
 
+    # add everything else
     for i in range(len(query_terms)):
         if i not in phrase_indices_all:
             term = query_terms[i].strip('+-')
@@ -224,8 +232,25 @@ def search_files(dbx: Dropbox, query: str, all_files=None, path="", recursive=Tr
 
 load_dotenv()
 dbx = dropbox_init()
+
 # search_files(dbx, 'json +"the cat" -"sat on" +mats -"carpet" turkey "optional phrase"')
-# get_metadata_json(dbx, "+json")
+# print([f.path_lower for f in search_files(dbx, "")])
+
+# files = search_files(dbx, "json", recursive=False)
+# print([f.path_lower for f in files])
+# d = {}
+# for f in files:
+#     d[f.path_lower] = f
+
+# for path, file in d.items():
+#     print("file: " + path)
+#     meta = get_metadata_json(dbx, path, d)
+#     if len(meta) > 0:
+#         print("client modified: " + meta["client_modified_datetime"])
+#         if process_datetime(meta["client_modified_datetime"]) > datetime(2023, 6, 26, 5, 58, 52):
+#             print("recent")
+#     print()
+
 # print([f.path_lower for f in search_files(dbx, "jpg +training -airfare")])
 # add_metadata_to_files(dbx)
 
