@@ -234,26 +234,16 @@ load_dotenv()
 dbx = dropbox_init()
 
 # search_files(dbx, 'json +"the cat" -"sat on" +mats -"carpet" turkey "optional phrase"')
-# print([f.path_lower for f in search_files(dbx, "")])
 
-# files = search_files(dbx, "json", recursive=False)
-# print([f.path_lower for f in files])
-# d = {}
-# for f in files:
-#     d[f.path_lower] = f
+files = search_files(dbx, "json", recursive=False)
+print([f.path_lower for f in files])
+d = {}
+for f in files:
+    d[f.path_lower] = f
 
-# for path, file in d.items():
-#     print("file: " + path)
-#     meta = get_metadata_json(dbx, path, d)
-#     if len(meta) > 0:
-#         print("client modified: " + meta["client_modified_datetime"])
-#         if process_datetime(meta["client_modified_datetime"]) > datetime(2023, 6, 26, 5, 58, 52):
-#             print("recent")
-#     print()
-
-# print([f.path_lower for f in search_files(dbx, "jpg +training -airfare")])
-# add_metadata_to_files(dbx)
-
-# d = get_metadata_json(dbx, "invoice json")
-# print(d)
-
+recently_edited = []
+for path, file in d.items():
+    meta = get_metadata_json(dbx, path, d)
+    if len(meta) > 0:
+        if process_datetime(meta["client_modified_datetime"]) > datetime(2023, 6, 26, 5, 58, 52):
+            recently_edited.append(meta["path_lower"])
