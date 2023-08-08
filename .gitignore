@@ -1,2 +1,6 @@
 .env
 venv/
+aws/
+awscliv2.zip
+__pycache__/
+tutorial.py

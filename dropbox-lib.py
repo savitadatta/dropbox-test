@@ -2,24 +2,16 @@ from typing import Dict, Tuple, List, Any
 import json
 import os
 from datetime import datetime
-from dotenv import load_dotenv, set_key
+from dotenv import load_dotenv
 
 from dropbox import Dropbox
 from dropbox.files import Metadata, FileMetadata, DeletedMetadata, WriteMode
 from dropbox.exceptions import ApiError
 
-
-class NewMetadata(FileMetadata):
-    last_updated: datetime
+from utils import *
 
 
 # Env and dates
-def format_datetime(value: datetime) -> str:
-    return datetime.strftime(value, "%Y-%m-%d %H:%M:%S")
-
-def process_datetime(value: str) -> datetime:
-    return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
-
 def get_last_edited(default: datetime) -> datetime:
     env_datetime = os.getenv("LAST_EDITED")
     if not env_datetime:
@@ -30,10 +22,6 @@ def get_last_edited(default: datetime) -> datetime:
 def get_last_edited_or_now() -> datetime:
     last_checked_default = datetime.now()
     return get_last_edited(last_checked_default)
-
-def update_env(key: str, value: str) -> str:
-    set_key(".env", key, value)
-    return value
 
 # Dropbox processing
 def process_folder_entries(current_state: Dict[str, Metadata], entries) -> Dict[str, FileMetadata]:
@@ -154,67 +142,6 @@ def get_metadata_json(dbx: Dropbox, query: str, all_files=None, has_run=False) -
         # TODO throw exception? return None?
         return {}
 
-def parse_query(query: str) -> Tuple[List[str], List[str], List[str]]:
-    query_terms = query.split(" ")
-    include = []
-    exclude = []
-    optional = []
-
-    phrases = []
-    phrase_indices = []
-    phrase_indices_all = []
-    
-    # find out which parts are in phrases
-    for i in range(len(query_terms) - 1):
-        if query_terms[i].startswith('"') or \
-            (any(query_terms[i].startswith(inc_ex) for inc_ex in ["+", "-"]) and query_terms[i][1] == '"'):
-            for j in range(i, len(query_terms)):
-                if query_terms[j].endswith('"'):
-                    phrases.append(" ".join(query_terms[i:j+1]).strip('+-"'))
-                    phrase_indices.append([n for n in range(i, j+1)])
-                    phrase_indices_all.extend(range(i, j+1))
-                    break
-
-    # get indices of which parts to include or exclude
-    include_indices = [i for i in range(len(query_terms)) \
-                       if query_terms[i].startswith("+") and len(query_terms[i]) > 1]
-    exclude_indices = [i for i in range(len(query_terms)) \
-                       if query_terms[i].startswith("-") and len(query_terms[i]) > 1]
-    
-    # add phrases and single terms to include/exclude
-    for i in include_indices:
-        added = False
-        for phrase in range(len(phrases)):
-            if i == phrase_indices[phrase][0]:
-                include.append(phrases[phrase])
-                added = True
-                break
-        if not added:
-            include.append(query_terms[i].strip("+"))
-                
-    for i in exclude_indices:
-        added = False
-        for phrase in range(len(phrases)):
-            if i == phrase_indices[phrase][0]:
-                exclude.append(phrases[phrase])
-                added = True
-                break
-        if not added:
-            include.append(query_terms[i].strip("-"))
-
-    for ph in phrases:
-        if ph not in include + exclude:
-            optional.append(ph)
-
-    # add everything else
-    for i in range(len(query_terms)):
-        if i not in phrase_indices_all:
-            term = query_terms[i].strip('+-')
-            if len(term) <= 1 or term not in include + exclude + optional:
-                optional.append(term)
-
-    return include, exclude, optional
-
 def search_files(dbx: Dropbox, query: str, all_files=None, path="", recursive=True) -> List[Metadata]:
     include, exclude, optional = parse_query(query)
 
@@ -224,8 +151,7 @@ def search_files(dbx: Dropbox, query: str, all_files=None, path="", recursive=Tr
     result = []
 
     for path_lower, metadata in all_files.items():
-        if (not any(e in path_lower for e in exclude)) and all(i in path_lower for i in include) \
-                and (any(o in path_lower for o in optional) or all(o in path_lower for o in optional)):
+        if string_fits_query(path_lower, include, exclude, optional):
             result.append(metadata)
     return result
 
