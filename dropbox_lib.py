@@ -101,9 +101,11 @@ def update_metadata(dbx: Dropbox, metadata: Dict[str, Any], key: str, value: Any
     )
 
 # General functionality
-def dropbox_init() -> Dropbox:
+def dropbox_init(access_token: str = "") -> Dropbox:
     print("Initialising Dropbox API")
-    dbx = Dropbox(os.getenv("ACCESS_TOKEN"))
+    if len(access_token) == 0:
+        access_token = os.getenv("ACCESS_TOKEN")
+    dbx = Dropbox(access_token)
     return dbx
 
 def get_metadata_json(dbx: Dropbox, query: str, all_files=None, has_run=False) -> Dict[str, Any]:
@@ -156,20 +158,20 @@ def search_files(dbx: Dropbox, query: str, all_files=None, path="", recursive=Tr
     return result
 
 
-load_dotenv()
-dbx = dropbox_init()
+# load_dotenv()
+# dbx = dropbox_init()
 
 # search_files(dbx, 'json +"the cat" -"sat on" +mats -"carpet" turkey "optional phrase"')
 
-files = search_files(dbx, "json", recursive=False)
-print([f.path_lower for f in files])
-d = {}
-for f in files:
-    d[f.path_lower] = f
+# files = search_files(dbx, "json", recursive=False)
+# print([f.path_lower for f in files])
+# d = {}
+# for f in files:
+#     d[f.path_lower] = f
 
-recently_edited = []
-for path, file in d.items():
-    meta = get_metadata_json(dbx, path, d)
-    if len(meta) > 0:
-        if process_datetime(meta["client_modified_datetime"]) > datetime(2023, 6, 26, 5, 58, 52):
-            recently_edited.append(meta["path_lower"])
+# recently_edited = []
+# for path, file in d.items():
+#     meta = get_metadata_json(dbx, path, d)
+#     if len(meta) > 0:
+#         if process_datetime(meta["client_modified_datetime"]) > datetime(2023, 6, 26, 5, 58, 52):
+#             recently_edited.append(meta["path_lower"])

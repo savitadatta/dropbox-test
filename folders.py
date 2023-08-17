@@ -1,10 +1,11 @@
 import os
 import json
-from typing import List
+from typing import Dict, List
 from datetime import datetime
 from dotenv import load_dotenv
 from google.cloud import storage
 from utils import parse_query, string_fits_query, format_datetime
+from dropbox_lib import dropbox_init
 
 def search(dir: str, query: str) -> None:
     include, exclude, optional = parse_query(query)
@@ -15,12 +16,12 @@ def search(dir: str, query: str) -> None:
 
 ### Files & metadata
 # TODO find out metadata format
-def get_filenames_from(dir: str) -> List[str]:
-    all_file_paths = []
+def get_filenames_from(dir: str) -> Dict[str, str]:
+    all_file_paths = dict()
     for root, dirs, files, in os.walk(dir):
         for file in files:
-            filename = os.path.join(root, file)
-            all_file_paths.append(filename)
+            path = os.path.join(root, file)
+            all_file_paths[path] = file
     return all_file_paths
 
 def add_metadata(existing_files: List[str]):
@@ -45,7 +46,14 @@ def add_metadata(existing_files: List[str]):
                 #     json.dump(contents, new_file, indent=2, default=str)
 
 ### Google Cloud Storage
-def upload_file(source_file_name, destination_blob_name="", bucket_name="archive-0000-archive-bucket"):
+buckets = {
+    "STANDARD": "archive-0000-standard-bucket",
+    "MONTHLY": "archive-0000-nearline-bucket",
+    "QUARTERLY": "archive-0000-coldline-bucket",
+    "ANNUAL": "archive-0000-archive-bucket",
+}
+
+def upload_file(source_file_name, destination_blob_name="", bucket_name=buckets["ANNUAL"]):
     """Uploads a file to the bucket."""
     if len(destination_blob_name) == 0:
         destination_blob_name = source_file_name
@@ -65,16 +73,21 @@ def get_blob_name_from_filename(full_path, root):
     return short
 
 ### General
-def process_archive_folder(dir="./files/archive"):
-    archive_dir = os.path.join(dir, "glacier")
-    medium_files = get_filenames_from(os.path.join(dir, "dropbox"))
-    archive_files = get_filenames_from(archive_dir)
+def upload_to_gcloud_archive(dir, bucket_name=buckets["ANNUAL"]):
+    if not dir:
+        print("ERROR: no directory specified")
+        return
+    archive_files = get_filenames_from(dir)
 
-    blob_name = get_blob_name_from_filename(archive_files[0], archive_dir)
-    upload_file(archive_files[0], blob_name)
-    # TODO upload to whatever relevant storage class
-    # delete from folder?
-    # do the same with dropbox? depends on how the files are currently being stored
+    for path, filename in archive_files.items():
+        blob_name = get_blob_name_from_filename(path, dir)
+        print(f"path: {path}, filename: {filename}, blob: {blob_name}")
+        upload_file(path, blob_name, bucket_name)
+
+def upload_to_dropbox(dir):
+    dbx = dropbox_init(os.getenv("ACCESS_TOKEN"))
+    pass
 
 load_dotenv()
-process_archive_folder(os.getenv("ARCHIVE_DIR"))
+upload_to_gcloud_archive(os.getenv("ARCHIVE_DIR"))
+upload_to_dropbox(os.getenv("ARCHIVE_DIR"))
