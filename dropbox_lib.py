@@ -5,6 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from dropbox import Dropbox
+from dropbox import DropboxOAuth2FlowNoRedirect
 from dropbox.files import Metadata, FileMetadata, DeletedMetadata, WriteMode
 from dropbox.exceptions import ApiError
 
@@ -52,7 +53,7 @@ def get_files(dbx: Dropbox, path="", recursive=True) -> Dict[str, FileMetadata]:
         files = process_folder_entries(files, result.entries)
     return files
 
-# File processing + metadata
+# File metadata (could probably delete this section)
 def add_metadata(dbx: Dropbox, entry: FileMetadata) -> None:
     filename_split = entry.path_lower.split(".")
     if len(filename_split) > 1:
@@ -101,13 +102,43 @@ def update_metadata(dbx: Dropbox, metadata: Dict[str, Any], key: str, value: Any
     )
 
 # General functionality
-def dropbox_init(access_token: str = "") -> Dropbox:
-    print("Initialising Dropbox API")
-    if len(access_token) == 0:
-        access_token = os.getenv("ACCESS_TOKEN")
-    dbx = Dropbox(access_token)
+def get_refresh_token(app_key):
+    auth_flow = DropboxOAuth2FlowNoRedirect(app_key, use_pkce=True, token_access_type='offline')
+    url = auth_flow.start()
+    print("1. Go to: " + url)
+    print("2. Click \"Allow\" (you might have to log in first).")
+    print("3. Copy the authorization code.")
+    auth_code = input("Enter the authorization code here: ").strip()
+
+    try:
+        refresh_token = auth_flow.finish(auth_code).refresh_token
+    except Exception as e:
+        print('Error: %s' % (e,))
+        exit(1)
+
+    update_env("REFRESH_TOKEN", refresh_token)
+    return refresh_token
+
+def get_dropbox(app_key=None, refresh_token=None, access_token=None):
+    if app_key is None:
+        app_key = os.getenv("APP_KEY")
+    if app_key is not None:
+        if refresh_token is None:
+            refresh_token = get_refresh_token(app_key)
+        dbx = Dropbox(oauth2_refresh_token=refresh_token, app_key=app_key)
+    elif access_token is not None:
+        dbx = Dropbox(access_token)
+    else:
+        print("Error: No Dropbox credentials found")
+        return None
     return dbx
 
+def dropbox_init(access_token: str = "") -> Dropbox:
+    if len(access_token) == 0:
+        access_token = os.getenv("ACCESS_TOKEN")
+    dbx = get_dropbox(access_token=access_token)
+    return dbx
+# DEL
 def get_metadata_json(dbx: Dropbox, query: str, all_files=None, has_run=False) -> Dict[str, Any]:
     if not "json" in query:
         query += " +.json"
@@ -160,6 +191,11 @@ def search_files(dbx: Dropbox, query: str, all_files=None, path="", recursive=Tr
 
 # load_dotenv()
 # dbx = dropbox_init()
+# print("initialised: " + str(dbx))
+# dbx1 = get_dropbox(app_key=os.getenv("APP_KEY"))
+# print("just key: " + str(dbx1))
+# dbx2 = get_dropbox(app_key=os.getenv("APP_KEY"), refresh_token=os.getenv("REFRESH_TOKEN"))
+# print("refresh: " + str(dbx2))
 
 # search_files(dbx, 'json +"the cat" -"sat on" +mats -"carpet" turkey "optional phrase"')
 

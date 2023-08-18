@@ -5,7 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from google.cloud import storage
 from utils import parse_query, string_fits_query, format_datetime
-from dropbox_lib import dropbox_init
+from dropbox_lib import get_dropbox
 
 def search(dir: str, query: str) -> None:
     include, exclude, optional = parse_query(query)
@@ -21,6 +21,8 @@ def get_filenames_from(dir: str) -> Dict[str, str]:
     for root, dirs, files, in os.walk(dir):
         for file in files:
             path = os.path.join(root, file)
+            while '//' in path:
+                path = path.replace('//', '/')
             all_file_paths[path] = file
     return all_file_paths
 
@@ -73,21 +75,28 @@ def get_blob_name_from_filename(full_path, root):
     return short
 
 ### General
-def upload_to_gcloud_archive(dir, bucket_name=buckets["ANNUAL"]):
-    if not dir:
-        print("ERROR: no directory specified")
-        return
-    archive_files = get_filenames_from(dir)
+def upload_to_gcloud_archive(files: Dict[str, str], bucket_name: str = buckets["ANNUAL"]):
+    files = get_filenames_from(dir)
 
-    for path, filename in archive_files.items():
+    for path, filename in files.items():
         blob_name = get_blob_name_from_filename(path, dir)
         print(f"path: {path}, filename: {filename}, blob: {blob_name}")
         upload_file(path, blob_name, bucket_name)
 
-def upload_to_dropbox(dir):
-    dbx = dropbox_init(os.getenv("ACCESS_TOKEN"))
+def upload_to_dropbox(dbx, files, destination=""):
+    for path, filename in files.items():
+        with open(path, 'rb') as file:
+            # TODO FIX THIS
+            contents = file.read()
+            edited_path = path[1:] if path.startswith(".") else path
+            dbx.files_upload(contents, os.path.join(destination, edited_path))
+
+def download_file(query: str):
     pass
 
 load_dotenv()
-upload_to_gcloud_archive(os.getenv("ARCHIVE_DIR"))
-upload_to_dropbox(os.getenv("ARCHIVE_DIR"))
+files = get_filenames_from(os.getenv("ARCHIVE_DIR"))
+dbx = get_dropbox(os.getenv("APP_KEY"), os.getenv("REFRESH_TOKEN"))
+
+# upload_to_gcloud_archive(files)
+upload_to_dropbox(dbx, files, "C:\Users\Savita\Dropbox\Project\This")
