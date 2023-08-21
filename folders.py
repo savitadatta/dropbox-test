@@ -83,13 +83,14 @@ def upload_to_gcloud_archive(files: Dict[str, str], bucket_name: str = buckets["
         print(f"path: {path}, filename: {filename}, blob: {blob_name}")
         upload_file(path, blob_name, bucket_name)
 
-def upload_to_dropbox(dbx, files, destination=""):
+def upload_to_dropbox(dbx, files, destination_folder=""):
     for path, filename in files.items():
         with open(path, 'rb') as file:
             # TODO FIX THIS
             contents = file.read()
-            edited_path = path[1:] if path.startswith(".") else path
-            dbx.files_upload(contents, os.path.join(destination, edited_path))
+            edited_path = path[2:] if path.startswith(os.path.join(".", "")) else path
+            destination_path = os.sep + os.path.join(destination_folder, edited_path)
+            dbx.files_upload(contents, os.sep + os.path.join(destination_folder, edited_path))
 
 def download_file(query: str):
     pass
@@ -99,4 +100,4 @@ files = get_filenames_from(os.getenv("ARCHIVE_DIR"))
 dbx = get_dropbox(os.getenv("APP_KEY"), os.getenv("REFRESH_TOKEN"))
 
 # upload_to_gcloud_archive(files)
-upload_to_dropbox(dbx, files, "C:\Users\Savita\Dropbox\Project\This")
+upload_to_dropbox(dbx, files, os.path.join("Shared", "Folder C"))
