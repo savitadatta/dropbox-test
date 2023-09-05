@@ -78,4 +78,4 @@ def parse_query(query: str) -> Tuple[List[str], List[str], List[str]]:
 def string_fits_query(test: str, include: List[str],
                       exclude: List[str], optional: List[str]) -> bool:
     return (not any(e in test for e in exclude)) and all(i in test for i in include) \
-                and (any(o in test for o in optional) or len(optional == 0))
+                and (any(o in test for o in optional) or len(optional) == 0)

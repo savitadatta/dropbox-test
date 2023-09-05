@@ -1,18 +1,29 @@
 import os
 import json
-from typing import Dict, List
+from typing import Dict, List, Any
 from datetime import datetime
 from dotenv import load_dotenv
 from google.cloud import storage
 from utils import parse_query, string_fits_query, format_datetime
 from dropbox_lib import get_dropbox
 
-def search(dir: str, query: str) -> None:
+def search_dir(dir: str, query: str) -> List[str]:
     include, exclude, optional = parse_query(query)
+    result = []
     for root, dirs, files in os.walk(dir):
         for file in files:
             if string_fits_query(file, include, exclude, optional):
-                print(os.path.join(root, file))
+                result.append(os.path.join(root, file))
+    return result
+
+def search_blobs(blobs: List[Any], query: str) -> List[str]:
+    include, exclude, optional = parse_query(query)
+    result = []
+    files = [blob.name for blob in blobs]
+    for file in files:
+        if string_fits_query(file, include, exclude, optional):
+            result.append(file)
+    return result
 
 ### Files & metadata
 # TODO find out metadata format
@@ -75,7 +86,7 @@ def get_blob_name_from_filename(full_path, root):
     return short
 
 ### General
-def upload_to_gcloud_archive(files: Dict[str, str], bucket_name: str = buckets["ANNUAL"]):
+def upload_to_gcloud_archive(dir: str, bucket_name: str = buckets["ANNUAL"]):
     files = get_filenames_from(dir)
 
     for path, filename in files.items():
@@ -86,18 +97,32 @@ def upload_to_gcloud_archive(files: Dict[str, str], bucket_name: str = buckets["
 def upload_to_dropbox(dbx, files, destination_folder=""):
     for path, filename in files.items():
         with open(path, 'rb') as file:
-            # TODO FIX THIS
             contents = file.read()
             edited_path = path[2:] if path.startswith(os.path.join(".", "")) else path
             destination_path = os.sep + os.path.join(destination_folder, edited_path)
             dbx.files_upload(contents, os.sep + os.path.join(destination_folder, edited_path))
 
-def download_file(query: str):
+def download_file(query: str, dbx, local_path: str = ".", bucket_name: str = buckets["ANNUAL"]):
+    local = search_dir(local_path, query) # TODO fix this
+    dbx_matches = [file.metadata.path_lower for file in dbx.files_search("", query).matches]
+    storage_client = storage.Client()
+    blobs = storage_client.list_blobs(bucket_name)
+    archive_matches = search_blobs(blobs, query)
+
+    # if len(local) == 0:
+    #     dbx_matches = dbx.files_search("", query).matches
+
+    #     if len(dbx_matches) == 0:
+    #         storage_client = storage.Client()
+    #         blobs = storage_client.list_blobs(bucket_name)
+    #         archive_matches = search_blobs(blobs, query)
+    breakpoint()
     pass
 
 load_dotenv()
 files = get_filenames_from(os.getenv("ARCHIVE_DIR"))
 dbx = get_dropbox(os.getenv("APP_KEY"), os.getenv("REFRESH_TOKEN"))
 
-# upload_to_gcloud_archive(files)
-upload_to_dropbox(dbx, files, os.path.join("Shared", "Folder C"))
+# upload_to_gcloud_archive('./files/archive/glacier')
+# upload_to_dropbox(dbx, files, os.path.join("Shared", "Folder C"))
+download_file("2", dbx)
