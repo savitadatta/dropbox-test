@@ -60,7 +60,7 @@ def parse_query(query: str) -> Tuple[List[str], List[str], List[str]]:
                 added = True
                 break
         if not added:
-            include.append(query_terms[i].strip("-"))
+            exclude.append(query_terms[i].strip("-"))
 
     for ph in phrases:
         if ph not in include + exclude:

@@ -1,6 +1,6 @@
 import os
 import json
-from typing import Dict, List, Any
+from typing import Dict, List, Tuple, Any
 from datetime import datetime
 from dotenv import load_dotenv
 from google.cloud import storage
@@ -66,7 +66,7 @@ buckets = {
     "ANNUAL": "archive-0000-archive-bucket",
 }
 
-def upload_file(source_file_name, destination_blob_name="", bucket_name=buckets["ANNUAL"]):
+def upload_file(bucket_name, source_file_name, destination_blob_name=""):
     """Uploads a file to the bucket."""
     if len(destination_blob_name) == 0:
         destination_blob_name = source_file_name
@@ -77,7 +77,7 @@ def upload_file(source_file_name, destination_blob_name="", bucket_name=buckets[
     blob.upload_from_filename(source_file_name)
     print(f"File {source_file_name} uploaded to {destination_blob_name}.")
 
-def get_blob_name_from_filename(full_path, root):
+def get_name_from_root(full_path: str, root: str) -> str:
     full_path = os.path.abspath(full_path)
     root = os.path.abspath(root)
     short = full_path.split(root)[-1]
@@ -86,13 +86,13 @@ def get_blob_name_from_filename(full_path, root):
     return short
 
 ### General
-def upload_to_gcloud_archive(dir: str, bucket_name: str = buckets["ANNUAL"]):
+def upload_to_gcloud_archive(dir: str, bucket_name: str):
     files = get_filenames_from(dir)
 
     for path, filename in files.items():
-        blob_name = get_blob_name_from_filename(path, dir)
+        blob_name = get_name_from_root(path, dir)
         print(f"path: {path}, filename: {filename}, blob: {blob_name}")
-        upload_file(path, blob_name, bucket_name)
+        upload_file(bucket_name, path, blob_name)
 
 def upload_to_dropbox(dbx, files, destination_folder=""):
     for path, filename in files.items():
@@ -102,27 +102,63 @@ def upload_to_dropbox(dbx, files, destination_folder=""):
             destination_path = os.sep + os.path.join(destination_folder, edited_path)
             dbx.files_upload(contents, os.sep + os.path.join(destination_folder, edited_path))
 
-def download_file(query: str, dbx, local_path: str = ".", bucket_name: str = buckets["ANNUAL"]):
+def search_for_file(query: str, dbx, local_path: str, bucket_name: str, index_location: str = ""):
     local = search_dir(local_path, query) # TODO fix this
     dbx_matches = [file.metadata.path_lower for file in dbx.files_search("", query).matches]
     storage_client = storage.Client()
     blobs = storage_client.list_blobs(bucket_name)
     archive_matches = search_blobs(blobs, query)
+    results = [local, dbx_matches, archive_matches]
 
-    # if len(local) == 0:
-    #     dbx_matches = dbx.files_search("", query).matches
-
-    #     if len(dbx_matches) == 0:
-    #         storage_client = storage.Client()
-    #         blobs = storage_client.list_blobs(bucket_name)
-    #         archive_matches = search_blobs(blobs, query)
     breakpoint()
     pass
 
-load_dotenv()
-files = get_filenames_from(os.getenv("ARCHIVE_DIR"))
-dbx = get_dropbox(os.getenv("APP_KEY"), os.getenv("REFRESH_TOKEN"))
+def translate_query(query: str, index_location: str) -> Tuple[List[str], List[str], List[str]]:
+    include, exclude, optional = parse_query(query)
 
-# upload_to_gcloud_archive('./files/archive/glacier')
+    index = None
+    with open(index_location, "r") as file:
+        index = json.load(file)
+    if not index:
+        print("error loading index")
+        return
+
+    # I don't think we actually need this bit
+    temp = set(exclude)
+    for e in exclude:
+        res = index.get(e)
+        if not res:
+            res = set()
+            for i in index:
+                entry = index.get(i)
+                if e in entry:
+                    res.update([i] + entry)
+        temp.update(res)
+    exclude = list(temp)
+
+    temp = set(optional)
+    for e in include + optional:
+        res = index.get(e)
+        if not res:
+            res = set()
+            for i in index:
+                entry = index.get(i)
+                if e in entry:
+                    res.update([i] + entry)
+        temp.update(res)
+    optional = list(temp)
+
+    include = [i for i in include if i not in optional]
+    return include, exclude, optional
+
+# load_dotenv()
+index_location = "./search_terms.json"
+print(translate_query('-Kind +mulher man +"the cat"', index_location))
+
+# files = get_filenames_from(os.getenv("ARCHIVE_DIR"))
+# dbx = get_dropbox(os.getenv("APP_KEY"), os.getenv("REFRESH_TOKEN"))
+
+# upload_to_gcloud_archive('./files/archive/glacier', buckets["ANNUAL"])
 # upload_to_dropbox(dbx, files, os.path.join("Shared", "Folder C"))
-download_file("2", dbx)
+# search_for_file("2", dbx, "./files", buckets["ANNUAL"])
+
