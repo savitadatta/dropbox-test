@@ -110,7 +110,6 @@ def search_for_file(query: str, dbx, local_path: str, bucket_name: str, index_lo
     archive_matches = search_blobs(blobs, query)
     results = [local, dbx_matches, archive_matches]
 
-    breakpoint()
     pass
 
 def translate_query(query: str, index_location: str) -> Tuple[List[str], List[str], List[str]]:
